@@ -266,16 +266,12 @@ def main():
     parser = argparse.ArgumentParser(description="Cliente BACKFROS")
     parser.add_argument("ip", help="IP del servidor, o dirección .onion si usás --tor")
     parser.add_argument("port", nargs="?", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--tor", action="store_true",
-                         help="Conectar a través del proxy SOCKS5 local de Tor")
-    parser.add_argument("--proxy-host", default=DEFAULT_TOR_PROXY_HOST,
-                         help=f"Host del proxy SOCKS5 de Tor (default: {DEFAULT_TOR_PROXY_HOST})")
-    parser.add_argument("--proxy-port", type=int, default=DEFAULT_TOR_PROXY_PORT,
-                         help=f"Puerto del proxy SOCKS5 de Tor (default: {DEFAULT_TOR_PROXY_PORT})")
+    parser.add_argument("--tor", action="store_true", help="Conectar a través del proxy SOCKS5 local de Tor")
+    parser.add_argument("--proxy-host", default=DEFAULT_TOR_PROXY_HOST, help=f"Host del proxy SOCKS5 de Tor (default: {DEFAULT_TOR_PROXY_HOST})")
+    parser.add_argument("--proxy-port", type=int, default=DEFAULT_TOR_PROXY_PORT, help=f"Puerto del proxy SOCKS5 de Tor (default: {DEFAULT_TOR_PROXY_PORT})")
     args = parser.parse_args()
 
-    client = Client(args.ip, args.port, use_tor=args.tor,
-                     proxy_host=args.proxy_host, proxy_port=args.proxy_port)
+    client = Client(args.ip, args.port, use_tor=args.tor, proxy_host=args.proxy_host, proxy_port=args.proxy_port)
     try:
         asyncio.run(client.run())
     except (KeyboardInterrupt, EOFError):
