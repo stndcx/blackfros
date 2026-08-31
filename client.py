@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# 9050 Tor's default SocksPort
+
+import argparse
 import asyncio
 import json
 import socket
@@ -16,6 +19,8 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.widgets import TextArea
 
 DEFAULT_PORT = 5050
+DEFAULT_TOR_PROXY_HOST = "127.0.0.1"
+DEFAULT_TOR_PROXY_PORT = 9050
 
 BG = "#15141f"
 ACCENT = "#7c6fee"
@@ -49,10 +54,36 @@ STYLE = Style.from_dict({
 })
 
 
+def make_raw_socket(use_tor, proxy_host, proxy_port):
+    """
+    Returns an unconnected socket. If use_tor is True, returns a
+    socks.socksocket configured to tunnel through a local Tor SOCKS5
+    proxy, with remote (Tor-side) DNS resolution so .onion addresses
+    -- and regular hostnames -- are resolved by Tor, never locally.
+    This is what keeps your real IP out of the connection.
+    """
+    if not use_tor:
+        return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        import socks
+    except ImportError:
+        print("Falta 'pysocks'. Instalalo con: pip install pysocks")
+        sys.exit(1)
+
+    s = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
+    s.set_proxy(socks.SOCKS5, proxy_host, proxy_port, rdns=True)
+    return s
+
+
 class Client:
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, use_tor=False,
+                 proxy_host=DEFAULT_TOR_PROXY_HOST, proxy_port=DEFAULT_TOR_PROXY_PORT):
         self.ip = ip
         self.port = port
+        self.use_tor = use_tor
+        self.proxy_host = proxy_host
+        self.proxy_port = proxy_port
         self.nickname = None
         self.sock = None
         self.loop = None
@@ -117,7 +148,8 @@ class Client:
 
     def _status_left_text(self):
         nick = self.nickname or "..."
-        return f" {self.ip}:{self.port} · {nick}"
+        via = " [tor]" if self.use_tor else ""
+        return f" {self.ip}:{self.port}{via} · {nick}"
 
     def _render_output(self):
         fragments = []
@@ -208,14 +240,17 @@ class Client:
     async def run(self):
         self.loop = asyncio.get_running_loop()
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock = make_raw_socket(self.use_tor, self.proxy_host, self.proxy_port)
+        # Nota: la resolución de nombre (incluidos .onion) la hace Tor del
+        # lado del proxy cuando use_tor=True (rdns=True), nunca localmente.
         self.sock.connect((self.ip, self.port))
 
         threading.Thread(target=self._net_loop, daemon=True).start()
 
         print_banner("BACKFROS")
 
-        nickname = input(f"Elegí tu nickname para conectarte a {self.ip}:{self.port}: ").strip()
+        destino = f"{self.ip}:{self.port}" + (" (vía Tor)" if self.use_tor else "")
+        nickname = input(f"Elegí tu nickname para conectarte a {destino}: ").strip()
         self.nickname = nickname or "anon"
         self.sock.sendall((self.nickname + "\n").encode("utf-8"))
 
@@ -228,14 +263,19 @@ class Client:
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Uso: python3 client.py <ip_servidor> [puerto]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Cliente BACKFROS")
+    parser.add_argument("ip", help="IP del servidor, o dirección .onion si usás --tor")
+    parser.add_argument("port", nargs="?", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--tor", action="store_true",
+                         help="Conectar a través del proxy SOCKS5 local de Tor")
+    parser.add_argument("--proxy-host", default=DEFAULT_TOR_PROXY_HOST,
+                         help=f"Host del proxy SOCKS5 de Tor (default: {DEFAULT_TOR_PROXY_HOST})")
+    parser.add_argument("--proxy-port", type=int, default=DEFAULT_TOR_PROXY_PORT,
+                         help=f"Puerto del proxy SOCKS5 de Tor (default: {DEFAULT_TOR_PROXY_PORT})")
+    args = parser.parse_args()
 
-    ip = sys.argv[1]
-    port = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_PORT
-
-    client = Client(ip, port)
+    client = Client(args.ip, args.port, use_tor=args.tor,
+                     proxy_host=args.proxy_host, proxy_port=args.proxy_port)
     try:
         asyncio.run(client.run())
     except (KeyboardInterrupt, EOFError):

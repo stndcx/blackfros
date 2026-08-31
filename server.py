@@ -11,8 +11,22 @@ where <hash> is derived from the nickname. That .md file is the
 "database" of that user's products -- it can be edited by hand
 directly on the server, or remotely with the ADD / REMOVE commands.
 
+--- Tor / privacy notes ---
+By default this server now binds to 127.0.0.1 instead of 0.0.0.0.
+That means it is NOT reachable directly over the internet or LAN --
+only through whatever forwards traffic to localhost, e.g. a Tor
+hidden service (see TOR_SETUP.md). This is intentional: it forces
+every connection to go through Tor, so the only "addr" this process
+ever sees is 127.0.0.1 (from the local Tor daemon), never a client's
+real IP.
+
+If you explicitly want to expose it on the LAN/internet (no Tor),
+set BACKFROS_HOST=0.0.0.0 in the environment. Doing so means this
+server WILL see and log the real IP of every connecting client.
+
 Usage:
     python3 server.py [port]
+    BACKFROS_HOST=0.0.0.0 python3 server.py [port]   # expose beyond localhost
 """
 
 import socket
@@ -23,7 +37,7 @@ import os
 import hashlib
 import re
 
-HOST = "0.0.0.0"
+HOST = os.environ.get("BACKFROS_HOST", "127.0.0.1")
 DEFAULT_PORT = 5050
 SESSION_TIMEOUT = 3600
 
@@ -55,6 +69,7 @@ BANNER = (
 nodes = {}
 lock = threading.RLock()
 
+
 def shop_hash(nickname):
     return hashlib.sha256(nickname.strip().lower().encode("utf-8")).hexdigest()[:10]
 
@@ -75,16 +90,6 @@ def create_default_shop(nickname, hash_id):
 
 
 def load_shop(hash_id):
-    """
-    Reads a shop .md file and returns (owner_nickname, product_list).
-    Parses a simple markdown table:
-
-        | id | name | price | stock |
-        |----|------|-------|-------|
-        | 1  | Shirt| 9500  | 10    |
-
-    If the file doesn't exist, returns (None, []).
-    """
     path = shop_path(hash_id)
     if not os.path.isfile(path):
         return None, []
@@ -470,6 +475,9 @@ def main():
 
     print(BANNER)
     print(f"{Color.CYAN}[*] Listening on {HOST}:{port}{Color.RESET}")
+    if HOST in ("127.0.0.1", "localhost"):
+        print(f"{Color.YELLOW}[*] Bound to localhost only -- only reachable via a local"
+              f" forwarder (e.g. Tor hidden service). See TOR_SETUP.md{Color.RESET}")
     print(f"{Color.CYAN}[*] Shops stored in: {SHOPS_DIR}{Color.RESET}")
     print(f"{Color.DIM}[*] Waiting for nodes (Ctrl+C to stop)...{Color.RESET}\n")
 
