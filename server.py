@@ -228,7 +228,7 @@ def handle_client(conn, addr):
     conn.settimeout(SESSION_TIMEOUT)
     nickname = None
     try:
-        send_msg(conn, "Welcome to BACKFROS\nby STNDC\nv1.0.0\nSend your nickname:")
+        send_msg(conn, "Welcome to BACKFROS\nby STNDC\nv2.0.0\nSend your nickname:")
         buf = conn.makefile("r", encoding="utf-8")
         first_line = buf.readline().strip()
 
