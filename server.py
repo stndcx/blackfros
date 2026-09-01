@@ -1,32 +1,7 @@
 #!/usr/bin/env python3
 """
 BACKFROS - shop server.
-
-Runs on your machine and listens for incoming TCP connections.
-Every client that connects identifies itself with a nickname and
-becomes a registered "node" on the server.
-
-Each node has its OWN SHOP: a Markdown file at shops/<hash>.md,
-where <hash> is derived from the nickname. That .md file is the
-"database" of that user's products -- it can be edited by hand
-directly on the server, or remotely with the ADD / REMOVE commands.
-
---- Tor / privacy notes ---
-By default this server now binds to 127.0.0.1 instead of 0.0.0.0.
-That means it is NOT reachable directly over the internet or LAN --
-only through whatever forwards traffic to localhost, e.g. a Tor
-hidden service (see TOR_SETUP.md). This is intentional: it forces
-every connection to go through Tor, so the only "addr" this process
-ever sees is 127.0.0.1 (from the local Tor daemon), never a client's
-real IP.
-
-If you explicitly want to expose it on the LAN/internet (no Tor),
-set BACKFROS_HOST=0.0.0.0 in the environment. Doing so means this
-server WILL see and log the real IP of every connecting client.
-
-Usage:
-    python3 server.py [port]
-    BACKFROS_HOST=0.0.0.0 python3 server.py [port]   # expose beyond localhost
+v2.2.1
 """
 
 import socket
