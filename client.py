@@ -26,7 +26,6 @@ class BackfrosClient(App):
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
-        Binding("ctrl+q", "quit_app", "Quit"),
         Binding("r", "refresh_shops", "Refresh"),
         Binding("enter", "view_selected", "View shop", show=False),
         Binding("b", "quick_buy", "Buy"),
