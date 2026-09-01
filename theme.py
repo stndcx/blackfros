@@ -1,6 +1,6 @@
 """
 BACKFROS - theme
-v2.2.1
+v3.0.0-pre.1
 """
 
 BG = "#1d1d2d"
