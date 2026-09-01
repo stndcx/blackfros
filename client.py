@@ -35,8 +35,10 @@ class BackfrosClient(App):
         Binding("c", "quick_chat", "Chat"),
         Binding("w", "quick_wallet", "Wallet"),
         Binding("s", "quick_search", "Search"),
-        Binding("/", "focus_input", "Raw cmd"),
+        Binding("tab", "focus_next", "Next panel"),
+        Binding("shift+tab", "focus_previous", "Prev panel"),
         Binding("escape", "blur_input", "Back to list", show=False),
+        Binding("question_mark", "show_help", "Help"),
     ]
 
     def __init__(self, ip, port, use_tor=False, proxy_host=DEFAULT_TOR_PROXY_HOST, proxy_port=DEFAULT_TOR_PROXY_PORT):
@@ -53,7 +55,7 @@ class BackfrosClient(App):
                 yield ListView(id="shops-list")
             with Vertical(id="detail-panel"):
                 yield Log(id="log-view", auto_scroll=True, highlight=False)
-        yield Input(placeholder="/ for raw command...", id="input-bar")
+        yield Input(placeholder="Tab here to type a raw command...", id="input-bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -135,11 +137,18 @@ class BackfrosClient(App):
     def action_refresh_shops(self) -> None:
         self.send_command("SHOPS")
 
-    def action_focus_input(self) -> None:
-        self.query_one("#input-bar", Input).focus()
-
     def action_blur_input(self) -> None:
         self.query_one("#shops-list", ListView).focus()
+
+    def action_show_help(self) -> None:
+        self.log_line(
+            "Keys: \u2191/\u2193 move  Enter view  Tab/Shift+Tab switch panel\n"
+            "  b buy   a add product   x remove product\n"
+            "  c chat  w wallet        s search\n"
+            "  r refresh shops         q quit\n"
+            "  (Tab into the bottom bar to type any raw server command)",
+            "dim",
+        )
 
     def action_view_selected(self) -> None:
         list_view = self.query_one("#shops-list", ListView)
@@ -198,14 +207,16 @@ class BackfrosClient(App):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
         event.input.value = ""
-        if text:
+        if text.upper() == "HELP":
+            self.action_show_help()
+        elif text:
             self.log_line(f"> {text}", "event")
             self.send_command(text)
         self.query_one("#shops-list", ListView).focus()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cliente BACKFROS (Textual)")
+    parser = argparse.ArgumentParser(description="Client BACKFROS")
     parser.add_argument("ip", help="Server IP, or address .onion --tor")
     parser.add_argument("port", nargs="?", type=int, default=DEFAULT_PORT)
     parser.add_argument("--tor", action="store_true")
