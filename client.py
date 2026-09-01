@@ -27,8 +27,16 @@ class BackfrosClient(App):
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
         Binding("ctrl+q", "quit_app", "Quit"),
-        Binding("r", "refresh_shops", "Refresh shops"),
-        Binding("/", "focus_input", "Command"),
+        Binding("r", "refresh_shops", "Refresh"),
+        Binding("enter", "view_selected", "View shop", show=False),
+        Binding("b", "quick_buy", "Buy"),
+        Binding("a", "quick_add", "Add product"),
+        Binding("x", "quick_remove", "Remove product"),
+        Binding("c", "quick_chat", "Chat"),
+        Binding("w", "quick_wallet", "Wallet"),
+        Binding("s", "quick_search", "Search"),
+        Binding("/", "focus_input", "Raw cmd"),
+        Binding("escape", "blur_input", "Back to list", show=False),
     ]
 
     def __init__(self, ip, port, use_tor=False, proxy_host=DEFAULT_TOR_PROXY_HOST, proxy_port=DEFAULT_TOR_PROXY_PORT):
@@ -45,7 +53,7 @@ class BackfrosClient(App):
                 yield ListView(id="shops-list")
             with Vertical(id="detail-panel"):
                 yield Log(id="log-view", auto_scroll=True, highlight=False)
-        yield Input(placeholder="Type a command (HELP for list)...", id="input-bar")
+        yield Input(placeholder="/ for raw command...", id="input-bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -57,6 +65,7 @@ class BackfrosClient(App):
         self.nickname = nickname
         self.sub_title = f"peer shop network · {nickname}"
         self.connect_and_listen()
+        self.query_one("#shops-list", ListView).focus()
 
     # --- Networking ---
 
@@ -92,6 +101,7 @@ class BackfrosClient(App):
         self.log_line(line, classify(line))
 
     def _pretty_shop(self, line: str):
+
         parts = line.split(maxsplit=6)
         if len(parts) < 7:
             return None
@@ -120,17 +130,6 @@ class BackfrosClient(App):
             label = f"{shop.get('owner', '?'):<15} {shop.get('products', 0)} items"
             list_view.append(ListItem(Label(label)))
 
-    def on_list_view_selected(self, event: ListView.Selected) -> None:
-        if event.list_view.id != "shops-list":
-            return
-        index = event.list_view.index
-        if index is None or index >= len(self.shops):
-            return
-        shop = self.shops[index]
-        hash_id = shop.get("hash")
-        if hash_id:
-            self.send_command(f"VIEW {hash_id}")
-
     # --- Actions ---
 
     def action_refresh_shops(self) -> None:
@@ -139,10 +138,62 @@ class BackfrosClient(App):
     def action_focus_input(self) -> None:
         self.query_one("#input-bar", Input).focus()
 
+    def action_blur_input(self) -> None:
+        self.query_one("#shops-list", ListView).focus()
+
+    def action_view_selected(self) -> None:
+        list_view = self.query_one("#shops-list", ListView)
+        if self.focused is list_view:
+            self._view_shop_at(list_view.index)
+
+    def action_quick_buy(self) -> None:
+        hash_id = self._selected_hash()
+        prefix = f"BUY {hash_id} " if hash_id else "BUY "
+        self._prefill_input(prefix)
+
+    def action_quick_add(self) -> None:
+        self._prefill_input("ADD ")
+
+    def action_quick_remove(self) -> None:
+        self._prefill_input("REMOVE ")
+
+    def action_quick_chat(self) -> None:
+        self._prefill_input("CHAT ")
+
+    def action_quick_wallet(self) -> None:
+        self._prefill_input("WALLET ")
+
+    def action_quick_search(self) -> None:
+        self._prefill_input("SEARCH ")
+
     def action_quit_app(self) -> None:
         self.send_command("QUIT")
         self.conn.close()
         self.exit()
+
+    def _prefill_input(self, text: str) -> None:
+        input_bar = self.query_one("#input-bar", Input)
+        input_bar.value = text
+        input_bar.focus()
+        input_bar.cursor_position = len(text)
+
+    def _selected_hash(self):
+        list_view = self.query_one("#shops-list", ListView)
+        index = list_view.index
+        if index is None or index >= len(self.shops):
+            return None
+        return self.shops[index].get("hash")
+
+    def _view_shop_at(self, index) -> None:
+        if index is None or index >= len(self.shops):
+            return
+        hash_id = self.shops[index].get("hash")
+        if hash_id:
+            self.send_command(f"VIEW {hash_id}")
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        if event.list_view.id == "shops-list":
+            self._view_shop_at(event.list_view.index)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
@@ -150,10 +201,11 @@ class BackfrosClient(App):
         if text:
             self.log_line(f"> {text}", "event")
             self.send_command(text)
+        self.query_one("#shops-list", ListView).focus()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Client BACKFROS")
+    parser = argparse.ArgumentParser(description="Cliente BACKFROS (Textual)")
     parser.add_argument("ip", help="Server IP, or address .onion --tor")
     parser.add_argument("port", nargs="?", type=int, default=DEFAULT_PORT)
     parser.add_argument("--tor", action="store_true")
