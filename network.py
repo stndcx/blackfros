@@ -1,6 +1,6 @@
 """
 BACKFROS - network
-v2.2.1
+v3.0.0-pre.1
 """
 
 import socket
@@ -19,7 +19,7 @@ def make_raw_socket(use_tor, proxy_host, proxy_port):
     try:
         import socks
     except ImportError:
-        print("Falta 'pysocks'. Instalalo con: pip install pysocks")
+        print("'pysocks' is missing. Install it with: pip install pysocks")
         sys.exit(1)
 
     s = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)

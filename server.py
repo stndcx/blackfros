@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 BACKFROS - shop server.
-v2.2.1
+v3.0.0-pre.1
 """
 
 import socket
@@ -203,7 +203,7 @@ def handle_client(conn, addr):
     conn.settimeout(SESSION_TIMEOUT)
     nickname = None
     try:
-        send_msg(conn, "Welcome to BACKFROS\nby STNDC\nv2.0.0\nSend your nickname:")
+        send_msg(conn, "Welcome to BACKFROS\nby STNDC\nv3.0.0-pre.1\nSend your nickname:")
         buf = conn.makefile("r", encoding="utf-8")
         first_line = buf.readline().strip()
 

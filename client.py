@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 BACKFROS - client
-v2.2.1
+v3.0.0-pre.1
 
 Run: python3 client.py <ip> [port] [--tor]
 
