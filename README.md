@@ -1,4 +1,11 @@
-# BACKFROS
+<p align="center">
+<a href="https://gitlab.com/stndc/blackfros/">
+<img src="https://gitlab.com/stndc/blackfros/-/raw/main/docs/screenshots/blackfros.jpg" alt="Backfros logo" width="200">
+</a>
+</p>
+
+<h3 align="center">Backfros</h3>
+
 A minimal peer-to-peer shop network over TCP. Each connected node gets its own
 shop, stored as a Markdown file on the server, plus simple chat commands to
 coordinate trades.
