@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BACKFROS - client
+BLACKFROS - client
 v3.0.0-pre.2
 """
 
@@ -18,10 +18,10 @@ from network import Connection, classify, DEFAULT_PORT, DEFAULT_TOR_PROXY_HOST, 
 from nmodal import NicknameModal
 
 
-class BackfrosClient(App):
+class BlackfrosClient(App):
 
     CSS = theme.CSS
-    TITLE = "BACKFROS"
+    TITLE = "BLACKFROS"
     SUB_TITLE = "peer shop network"
 
     BINDINGS = [
@@ -215,7 +215,7 @@ class BackfrosClient(App):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cliente BACKFROS (Textual)")
+    parser = argparse.ArgumentParser(description="Client BLACKFROS")
     parser.add_argument("ip", help="Server IP, or address .onion --tor")
     parser.add_argument("port", nargs="?", type=int, default=DEFAULT_PORT)
     parser.add_argument("--tor", action="store_true")
@@ -223,7 +223,7 @@ def main():
     parser.add_argument("--proxy-port", type=int, default=DEFAULT_TOR_PROXY_PORT)
     args = parser.parse_args()
 
-    app = BackfrosClient(args.ip, args.port, use_tor=args.tor, proxy_host=args.proxy_host, proxy_port=args.proxy_port)
+    app = BlackfrosClient(args.ip, args.port, use_tor=args.tor, proxy_host=args.proxy_host, proxy_port=args.proxy_port)
     try:
         app.run()
     except KeyboardInterrupt:

@@ -1,5 +1,5 @@
 """
-BACKFROS - nickname modal
+BLACKFROS - nickname modal
 v3.0.0-pre.1
 """
 
