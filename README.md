@@ -1,15 +1,18 @@
 <p align="center">
 	<a href="https://gitlab.com/stndc/blackfros/">
-		<img src="https://gitlab.com/stndc/blackfros/-/raw/main/docs/screenshots/blackfros.jpg" alt="Backfros logo" width="180">
+		<img src="https://gitlab.com/stndc/blackfros/-/raw/main/docs/screenshots/blackfros.jpg" alt="Blackfros logo" width="180">
 	</a>
 </p>
 
 <p align="center">
-	<strong>Backfros</strong><br>
+	<strong>Blackfros</strong><br>
 	<em>A minimal peer-to-peer shop network over TCP.</em>
 </p>
 
 Each connected node gets its own shop, stored as a Markdown file on the server, plus simple chat commands to coordinate trades.
+
+### Collaborate
+You can support me by [buying me a coffee](https://buymeacoffee.com/stndc).
 
 ## Features
 - Each nickname gets its own shop (`shops/<hash>.md`)
@@ -76,8 +79,8 @@ If you want the server reachable directly (no Tor), override the bind
 address:
 
 ```bash
-BACKFROS_HOST=0.0.0.0 python3 server.py [port]        # Linux/macOS
-$env:BACKFROS_HOST="0.0.0.0"; py server.py [port]      # Windows PowerShell
+BLACKFROS_HOST=0.0.0.0 python3 server.py [port]        # Linux/macOS
+$env:BLACKFROS_HOST="0.0.0.0"; py server.py [port]      # Windows PowerShell
 ```
 
 Doing this means the server will see and log the real IP of every
