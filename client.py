@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-BACKFROS - client
-v3.0.0-pre.1
+BLACKFROS - client
+v3.0.0-pre.2
 """
 
 import argparse
@@ -18,14 +18,15 @@ from network import Connection, classify, DEFAULT_PORT, DEFAULT_TOR_PROXY_HOST, 
 from nmodal import NicknameModal
 
 
-class BackfrosClient(App):
+class BlackfrosClient(App):
 
     CSS = theme.CSS
-    TITLE = "BACKFROS"
+    TITLE = "BLACKFROS"
     SUB_TITLE = "peer shop network"
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
+        Binding("ctrl+q", "quit_app", "Quit"),
         Binding("r", "refresh_shops", "Refresh"),
         Binding("enter", "view_selected", "View shop", show=False),
         Binding("b", "quick_buy", "Buy"),
@@ -50,7 +51,6 @@ class BackfrosClient(App):
         yield Header(show_clock=False)
         with Horizontal():
             with Vertical(id="shops-panel"):
-                yield Label(" Shops", classes="dim")
                 yield ListView(id="shops-list")
             with Vertical(id="detail-panel"):
                 yield Log(id="log-view", auto_scroll=True, highlight=False)
@@ -215,7 +215,7 @@ class BackfrosClient(App):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Client BACKFROS")
+    parser = argparse.ArgumentParser(description="Client BLACKFROS")
     parser.add_argument("ip", help="Server IP, or address .onion --tor")
     parser.add_argument("port", nargs="?", type=int, default=DEFAULT_PORT)
     parser.add_argument("--tor", action="store_true")
@@ -223,8 +223,11 @@ def main():
     parser.add_argument("--proxy-port", type=int, default=DEFAULT_TOR_PROXY_PORT)
     args = parser.parse_args()
 
-    app = BackfrosClient(args.ip, args.port, use_tor=args.tor, proxy_host=args.proxy_host, proxy_port=args.proxy_port)
-    app.run()
+    app = BlackfrosClient(args.ip, args.port, use_tor=args.tor, proxy_host=args.proxy_host, proxy_port=args.proxy_port)
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        print("\nBye.")
 
 
 if __name__ == "__main__":

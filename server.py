@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BACKFROS - shop server.
+BLACKFROS - shop server.
 v3.0.0-pre.1
 """
 
@@ -12,7 +12,7 @@ import os
 import hashlib
 import re
 
-HOST = os.environ.get("BACKFROS_HOST", "127.0.0.1")
+HOST = os.environ.get("BLACKFROS_HOST", "127.0.0.1")
 DEFAULT_PORT = 5050
 SESSION_TIMEOUT = 3600
 
@@ -35,7 +35,7 @@ class Color:
 BANNER = (
     Color.GREEN + Color.BOLD +
     "┌" + "─" * 58 + "┐\n" +
-    "│{:^58}│\n".format("BACKFROS") +
+    "│{:^58}│\n".format("BLACKFROS") +
     "│{:^58}│\n".format("distributed peer shop server") +
     "└" + "─" * 58 + "┘" +
     Color.RESET
@@ -203,7 +203,7 @@ def handle_client(conn, addr):
     conn.settimeout(SESSION_TIMEOUT)
     nickname = None
     try:
-        send_msg(conn, "Welcome to BACKFROS\nby STNDC\nv3.0.0-pre.1\nSend your nickname:")
+        send_msg(conn, "Welcome to BLACKFROS\nby STNDC\nv3.0.0-pre.1\nSend your nickname:")
         buf = conn.makefile("r", encoding="utf-8")
         first_line = buf.readline().strip()
 

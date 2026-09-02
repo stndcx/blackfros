@@ -1,5 +1,5 @@
 """
-BACKFROS - theme
+BLACKFROS - theme
 v3.0.0-pre.1
 """
 
