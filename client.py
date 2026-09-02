@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 BACKFROS - client
-v3.0.0-pre.1
+v3.0.0-pre.2
 """
 
 import argparse
@@ -26,6 +26,7 @@ class BackfrosClient(App):
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
+        Binding("ctrl+q", "quit_app", "Quit"),
         Binding("r", "refresh_shops", "Refresh"),
         Binding("enter", "view_selected", "View shop", show=False),
         Binding("b", "quick_buy", "Buy"),
@@ -50,7 +51,6 @@ class BackfrosClient(App):
         yield Header(show_clock=False)
         with Horizontal():
             with Vertical(id="shops-panel"):
-                yield Label(" Shops", classes="dim")
                 yield ListView(id="shops-list")
             with Vertical(id="detail-panel"):
                 yield Log(id="log-view", auto_scroll=True, highlight=False)
@@ -215,7 +215,7 @@ class BackfrosClient(App):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Client BACKFROS")
+    parser = argparse.ArgumentParser(description="Cliente BACKFROS (Textual)")
     parser.add_argument("ip", help="Server IP, or address .onion --tor")
     parser.add_argument("port", nargs="?", type=int, default=DEFAULT_PORT)
     parser.add_argument("--tor", action="store_true")
@@ -224,7 +224,10 @@ def main():
     args = parser.parse_args()
 
     app = BackfrosClient(args.ip, args.port, use_tor=args.tor, proxy_host=args.proxy_host, proxy_port=args.proxy_port)
-    app.run()
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        print("\nBye.")
 
 
 if __name__ == "__main__":
