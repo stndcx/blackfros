@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 BLACKFROS - shop server.
-v3.0.0-pre.1
+v3.0.0-pre.2
 """
 
 import socket
@@ -16,9 +16,30 @@ HOST = os.environ.get("BLACKFROS_HOST", "127.0.0.1")
 DEFAULT_PORT = 5050
 SESSION_TIMEOUT = 3600
 
+MAX_NICKNAME_LEN = 24
+MAX_PRODUCT_NAME_LEN = 40
+MAX_LINE_LEN = 512
+NICKNAME_RE = re.compile(r"^[A-Za-z0-9_\-\.]+$")
+
+MAX_TOTAL_CONNECTIONS = 200
+MAX_CONNECTIONS_PER_IP = 5
+MAX_COMMANDS_PER_SECOND = 10
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHOPS_DIR = os.path.join(BASE_DIR, "shops")
 os.makedirs(SHOPS_DIR, exist_ok=True)
+
+
+def valid_nickname(nickname):
+
+    return bool(nickname) and len(nickname) <= MAX_NICKNAME_LEN and NICKNAME_RE.match(nickname)
+
+
+def clean_product_name(name):
+
+    name = name.replace("|", "").strip()
+    name = "".join(ch for ch in name if ch.isprintable())
+    return name[:MAX_PRODUCT_NAME_LEN]
 
 
 class Color:
@@ -43,6 +64,9 @@ BANNER = (
 
 nodes = {}
 lock = threading.RLock()
+
+active_total = 0
+active_by_ip = {}
 
 
 def shop_hash(nickname):
@@ -168,6 +192,20 @@ def wallet_path(hash_id):
     return os.path.join(SHOPS_DIR, f"{hash_id}.wallet")
 
 
+def log_path(hash_id):
+    return os.path.join(SHOPS_DIR, f"{hash_id}.log")
+
+
+def wipe_shop(hash_id):
+
+    for path in (shop_path(hash_id), rating_path(hash_id),
+                 wallet_path(hash_id), log_path(hash_id)):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
 def set_wallet(hash_id, address):
     with open(wallet_path(hash_id), "w", encoding="utf-8") as f:
         f.write(address.strip())
@@ -199,9 +237,59 @@ def log(text, color=Color.DIM):
     print(f"{color}{text}{Color.RESET}")
 
 
+def register_connection(ip):
+
+    global active_total
+    with lock:
+        if active_total >= MAX_TOTAL_CONNECTIONS:
+            return False
+        if active_by_ip.get(ip, 0) >= MAX_CONNECTIONS_PER_IP:
+            return False
+        active_total += 1
+        active_by_ip[ip] = active_by_ip.get(ip, 0) + 1
+        return True
+
+
+def release_connection(ip):
+    global active_total
+    with lock:
+        active_total = max(0, active_total - 1)
+        if ip in active_by_ip:
+            active_by_ip[ip] -= 1
+            if active_by_ip[ip] <= 0:
+                del active_by_ip[ip]
+
+
+class RateLimiter:
+
+    def __init__(self, limit):
+        self.limit = limit
+        self.window_start = 0.0
+        self.count = 0
+
+    def allow(self):
+        import time
+        now = time.monotonic()
+        if now - self.window_start >= 1.0:
+            self.window_start = now
+            self.count = 0
+        self.count += 1
+        return self.count <= self.limit
+
+
 def handle_client(conn, addr):
     conn.settimeout(SESSION_TIMEOUT)
     nickname = None
+    registered = False
+    ip = addr[0]
+
+    if not register_connection(ip):
+        send_msg(conn, "ERROR server is at capacity, try again later")
+        conn.close()
+        return
+
+    rate_limiter = RateLimiter(MAX_COMMANDS_PER_SECOND)
+
     try:
         send_msg(conn, "Welcome to BLACKFROS\nby STNDC\nv3.0.0-pre.1\nSend your nickname:")
         buf = conn.makefile("r", encoding="utf-8")
@@ -213,12 +301,19 @@ def handle_client(conn, addr):
 
         nickname = first_line
 
+        if not valid_nickname(nickname):
+            send_msg(conn, "ERROR invalid nickname (letters/numbers/_-. only, max "
+                            f"{MAX_NICKNAME_LEN} chars)")
+            conn.close()
+            return
+
         with lock:
             if nickname in nodes:
                 send_msg(conn, "ERROR that nickname is already taken.\nReconnect with another one.")
                 conn.close()
                 return
             nodes[nickname] = {"conn": conn, "addr": addr}
+        registered = True
 
         my_hash = ensure_shop(nickname)
 
@@ -229,6 +324,12 @@ def handle_client(conn, addr):
         for line in buf:
             line = line.strip()
             if not line:
+                continue
+            if len(line) > MAX_LINE_LEN:
+                send_msg(conn, "ERROR line too long")
+                continue
+            if not rate_limiter.allow():
+                send_msg(conn, "ERROR too many commands, slow down")
                 continue
             parts = line.split()
             cmd = parts[0].upper()
@@ -245,6 +346,7 @@ def handle_client(conn, addr):
                     "-  CHAT <message>                   send a message to everyone\n"
                     "-  MSG <nick> <message>             send a private message\n"
                     "-  WHO                              list connected nodes\n"
+                    "-  WIPE                             permanently delete your shop and all its data\n"
                     "-  QUIT                             disconnect")
 
             elif cmd == "SHOPS":
@@ -317,8 +419,10 @@ def handle_client(conn, addr):
                 try:
                     price = float(parts[-2])
                     stock = int(parts[-1])
-                    name = " ".join(parts[1:-2])
+                    name = clean_product_name(" ".join(parts[1:-2]))
                     if not name:
+                        raise ValueError
+                    if price < 0 or stock < 0:
                         raise ValueError
                 except ValueError:
                     send_msg(conn, "ERROR invalid price/stock, or missing name")
@@ -422,6 +526,13 @@ def handle_client(conn, addr):
                 send_msg(target_info["conn"], f"DM {nickname} {text}")
                 send_msg(conn, f"OK message sent to {target}")
 
+            elif cmd == "WIPE":
+                with lock:
+                    wipe_shop(my_hash)
+                send_msg(conn, "OK your shop and all its data have been permanently deleted")
+                log(f"[x] Shop wiped: {nickname} ({my_hash})", Color.YELLOW)
+                break
+
             elif cmd == "QUIT":
                 send_msg(conn, "OK bye")
                 break
@@ -432,7 +543,8 @@ def handle_client(conn, addr):
     except (ConnectionResetError, socket.timeout):
         pass
     finally:
-        if nickname:
+        release_connection(ip)
+        if registered:
             with lock:
                 nodes.pop(nickname, None)
             broadcast(f"* {nickname} disconnected", exclude=nickname)
@@ -451,8 +563,7 @@ def main():
     print(BANNER)
     print(f"{Color.CYAN}[*] Listening on {HOST}:{port}{Color.RESET}")
     if HOST in ("127.0.0.1", "localhost"):
-        print(f"{Color.YELLOW}[*] Bound to localhost only -- only reachable via a local"
-              f" forwarder (e.g. Tor hidden service). See TOR_SETUP.md{Color.RESET}")
+        print(f"{Color.YELLOW}[*] Bound to localhost only -- only reachable via a local" f" forwarder (e.g. Tor hidden service). See TOR_SETUP.md{Color.RESET}")
     print(f"{Color.CYAN}[*] Shops stored in: {SHOPS_DIR}{Color.RESET}")
     print(f"{Color.DIM}[*] Waiting for nodes (Ctrl+C to stop)...{Color.RESET}\n")
 
