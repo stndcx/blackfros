@@ -1,6 +1,6 @@
 """
 BLACKFROS - network
-v3.0.0-pre.1
+v3.0.0-pre.2
 """
 
 import socket
