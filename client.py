@@ -5,11 +5,13 @@ v3.0.0-pre.2
 """
 
 import argparse
+import base64
 import json
 
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Header, Footer, ListView, ListItem, Label, Input, Log
+from textual.widgets import Header, Footer, ListView, ListItem, Label, Input, RichLog
 from textual.binding import Binding
 from textual import work
 
@@ -17,7 +19,7 @@ import theme
 from network import Connection, classify, DEFAULT_PORT, DEFAULT_TOR_PROXY_HOST, DEFAULT_TOR_PROXY_PORT
 from nmodal import NicknameModal
 from confirm_modal import ConfirmModal
-
+from images import render_image_ansi
 
 class BlackfrosClient(App):
 
@@ -36,6 +38,8 @@ class BlackfrosClient(App):
         Binding("w", "quick_wallet", "Wallet"),
         Binding("s", "quick_search", "Search"),
         Binding("d", "quick_wipe", "Wipe shop"),
+        Binding("i", "quick_image", "View image"),
+        Binding("u", "quick_upload", "Upload image"),
         Binding("tab", "focus_next", "Next panel"),
         Binding("shift+tab", "focus_previous", "Prev panel"),
         Binding("escape", "blur_input", "Back to list", show=False),
@@ -54,7 +58,7 @@ class BlackfrosClient(App):
             with Vertical(id="shops-panel"):
                 yield ListView(id="shops-list")
             with Vertical(id="detail-panel"):
-                yield Log(id="log-view", auto_scroll=True, highlight=False)
+                yield RichLog(id="log-view", auto_scroll=True, wrap=True)
         yield Input(placeholder="Tab here to type a raw command...", id="input-bar")
         yield Footer()
 
@@ -100,10 +104,29 @@ class BlackfrosClient(App):
             if pretty is not None:
                 self.log_line(pretty, "event")
                 return
+        elif line.startswith("IMG "):
+            self._handle_image(line)
+            return
         self.log_line(line, classify(line))
 
+    def _handle_image(self, line: str) -> None:
+        parts = line.split(maxsplit=3)
+        if len(parts) < 4:
+            return
+        _, hash_id, pid, b64_data = parts
+        try:
+            raw_bytes = base64.b64decode(b64_data)
+        except (ValueError, base64.binascii.Error):
+            self.log_line("ERROR couldn't decode image data", "error")
+            return
+        self.run_worker(lambda: self._render_and_show_image(raw_bytes), thread=True)
+
+    def _render_and_show_image(self, raw_bytes: bytes) -> None:
+        ansi = render_image_ansi(raw_bytes)
+        self.call_from_thread(self.log_image, ansi)
+
     def _pretty_shop(self, line: str):
- 
+
         parts = line.split(maxsplit=6)
         if len(parts) < 7:
             return None
@@ -123,7 +146,11 @@ class BlackfrosClient(App):
         return header + "\n" + "\n".join(rows)
 
     def log_line(self, text: str, style: str = "dim") -> None:
-        self.query_one("#log-view", Log).write_line(text)
+        color = theme.STYLE_COLORS.get(style, theme.TEXT)
+        self.query_one("#log-view", RichLog).write(Text(text, style=color))
+
+    def log_image(self, ansi_text: str) -> None:
+        self.query_one("#log-view", RichLog).write(Text.from_ansi(ansi_text))
 
     def refresh_shop_list(self) -> None:
         list_view = self.query_one("#shops-list", ListView)
@@ -145,6 +172,8 @@ class BlackfrosClient(App):
             "Keys: \u2191/\u2193 move  Enter view  Tab/Shift+Tab switch panel\n"
             "  b buy   a add product   x remove product\n"
             "  c chat  w wallet        s search\n"
+            "  i view product image\n"
+            "  u upload image (id + local file path)\n"
             "  d wipe shop (asks to confirm)\n"
             "  r refresh shops         q quit\n"
             "  (Tab into the bottom bar to type any raw server command)",
@@ -175,6 +204,14 @@ class BlackfrosClient(App):
 
     def action_quick_search(self) -> None:
         self._prefill_input("SEARCH ")
+
+    def action_quick_image(self) -> None:
+        hash_id = self._selected_hash()
+        prefix = f"GETIMG {hash_id} " if hash_id else "GETIMG "
+        self._prefill_input(prefix)
+
+    def action_quick_upload(self) -> None:
+        self._prefill_input("SETIMG ")
 
     def action_quick_wipe(self) -> None:
         self.push_screen(
@@ -225,10 +262,28 @@ class BlackfrosClient(App):
         event.input.value = ""
         if text.upper() == "HELP":
             self.action_show_help()
+        elif text[:6].upper() == "SETIMG":
+            self._upload_image(text)
         elif text:
             self.log_line(f"> {text}", "event")
             self.send_command(text)
         self.query_one("#shops-list", ListView).focus()
+
+    def _upload_image(self, text: str) -> None:
+        parts = text.split(maxsplit=2)
+        if len(parts) < 3:
+            self.log_line("ERROR usage: SETIMG <id> <path to image file>", "error")
+            return
+        _, pid, file_path = parts
+        try:
+            with open(file_path, "rb") as f:
+                raw_bytes = f.read()
+        except OSError as exc:
+            self.log_line(f"ERROR couldn't read {file_path}: {exc}", "error")
+            return
+        b64 = base64.b64encode(raw_bytes).decode("ascii")
+        self.log_line(f"> SETIMG {pid} {file_path} ({len(raw_bytes)} bytes)", "event")
+        self.send_command(f"SETIMG {pid} {b64}")
 
 
 def main():

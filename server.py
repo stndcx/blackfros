@@ -11,8 +11,9 @@ import json
 import os
 import hashlib
 import re
+import base64
 
-HOST = os.environ.get("BLACKFROS_HOST", "127.0.0.1")
+HOST = os.environ.get("BACKFROS_HOST", "127.0.0.1")
 DEFAULT_PORT = 5050
 SESSION_TIMEOUT = 3600
 
@@ -24,6 +25,8 @@ NICKNAME_RE = re.compile(r"^[A-Za-z0-9_\-\.]+$")
 MAX_TOTAL_CONNECTIONS = 200
 MAX_CONNECTIONS_PER_IP = 5
 MAX_COMMANDS_PER_SECOND = 10
+
+MAX_IMAGE_B64_LEN = 400_000
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SHOPS_DIR = os.path.join(BASE_DIR, "shops")
@@ -56,7 +59,7 @@ class Color:
 BANNER = (
     Color.GREEN + Color.BOLD +
     "┌" + "─" * 58 + "┐\n" +
-    "│{:^58}│\n".format("BLACKFROS") +
+    "│{:^58}│\n".format("BACKFROS") +
     "│{:^58}│\n".format("distributed peer shop server") +
     "└" + "─" * 58 + "┘" +
     Color.RESET
@@ -196,6 +199,23 @@ def log_path(hash_id):
     return os.path.join(SHOPS_DIR, f"{hash_id}.log")
 
 
+def image_path(hash_id, product_id):
+    return os.path.join(SHOPS_DIR, f"{hash_id}_{product_id}.img")
+
+
+def save_product_image(hash_id, product_id, raw_bytes):
+    with open(image_path(hash_id, product_id), "wb") as f:
+        f.write(raw_bytes)
+
+
+def load_product_image(hash_id, product_id):
+    path = image_path(hash_id, product_id)
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as f:
+        return f.read()
+
+
 def wipe_shop(hash_id):
 
     for path in (shop_path(hash_id), rating_path(hash_id),
@@ -204,6 +224,12 @@ def wipe_shop(hash_id):
             os.remove(path)
         except OSError:
             pass
+    for file_name in os.listdir(SHOPS_DIR):
+        if file_name.startswith(f"{hash_id}_") and file_name.endswith(".img"):
+            try:
+                os.remove(os.path.join(SHOPS_DIR, file_name))
+            except OSError:
+                pass
 
 
 def set_wallet(hash_id, address):
@@ -291,7 +317,7 @@ def handle_client(conn, addr):
     rate_limiter = RateLimiter(MAX_COMMANDS_PER_SECOND)
 
     try:
-        send_msg(conn, "Welcome to BLACKFROS\nby STNDC\nv3.0.0-pre.1\nSend your nickname:")
+        send_msg(conn, "Welcome to BACKFROS\nby STNDC\nv3.0.0-pre.1\nSend your nickname:")
         buf = conn.makefile("r", encoding="utf-8")
         first_line = buf.readline().strip()
 
@@ -326,8 +352,10 @@ def handle_client(conn, addr):
             if not line:
                 continue
             if len(line) > MAX_LINE_LEN:
-                send_msg(conn, "ERROR line too long")
-                continue
+                is_image_cmd = line[:6].upper() == "SETIMG"
+                if not (is_image_cmd and len(line) <= MAX_IMAGE_B64_LEN):
+                    send_msg(conn, "ERROR line too long")
+                    continue
             if not rate_limiter.allow():
                 send_msg(conn, "ERROR too many commands, slow down")
                 continue
@@ -343,10 +371,12 @@ def handle_client(conn, addr):
                     "-  ADD <name> <price> <stock>       add a product to your shop\n"
                     "-  REMOVE <id>                      remove a product from your shop\n"
                     "-  BUY <hash> <id> <qty>            buy from another shop\n"
+                    "-  SETIMG <id> <base64>             attach an image to your product\n"
+                    "-  GETIMG <hash> <id>                fetch a product's image\n"
                     "-  CHAT <message>                   send a message to everyone\n"
                     "-  MSG <nick> <message>             send a private message\n"
                     "-  WHO                              list connected nodes\n"
-                    "-  WIPE                             permanently delete your shop and all its data\n"
+                    "-  WIPE                              permanently delete your shop and all its data\n"
                     "-  QUIT                             disconnect")
 
             elif cmd == "SHOPS":
@@ -526,6 +556,46 @@ def handle_client(conn, addr):
                 send_msg(target_info["conn"], f"DM {nickname} {text}")
                 send_msg(conn, f"OK message sent to {target}")
 
+            elif cmd == "SETIMG":
+                if len(parts) < 3:
+                    send_msg(conn, "ERROR usage: SETIMG <id> <base64 image data>")
+                    continue
+                try:
+                    pid = int(parts[1])
+                except ValueError:
+                    send_msg(conn, "ERROR invalid id")
+                    continue
+                with lock:
+                    _, products = load_shop(my_hash)
+                    if not any(p["id"] == pid for p in products):
+                        send_msg(conn, "ERROR you don't have a product with that id")
+                        continue
+                    try:
+                        raw_bytes = base64.b64decode(parts[2], validate=True)
+                    except (ValueError, base64.binascii.Error):
+                        send_msg(conn, "ERROR invalid base64 image data")
+                        continue
+                    save_product_image(my_hash, pid, raw_bytes)
+                send_msg(conn, f"OK image set for product {pid} ({len(raw_bytes)} bytes)")
+
+            elif cmd == "GETIMG":
+                if len(parts) < 3:
+                    send_msg(conn, "ERROR usage: GETIMG <hash> <id>")
+                    continue
+                hash_id = parts[1]
+                try:
+                    pid = int(parts[2])
+                except ValueError:
+                    send_msg(conn, "ERROR invalid id")
+                    continue
+                with lock:
+                    raw_bytes = load_product_image(hash_id, pid)
+                if raw_bytes is None:
+                    send_msg(conn, "ERROR no image for that product")
+                else:
+                    b64 = base64.b64encode(raw_bytes).decode("ascii")
+                    send_msg(conn, f"IMG {hash_id} {pid} {b64}")
+
             elif cmd == "WIPE":
                 with lock:
                     wipe_shop(my_hash)
@@ -563,7 +633,8 @@ def main():
     print(BANNER)
     print(f"{Color.CYAN}[*] Listening on {HOST}:{port}{Color.RESET}")
     if HOST in ("127.0.0.1", "localhost"):
-        print(f"{Color.YELLOW}[*] Bound to localhost only -- only reachable via a local" f" forwarder (e.g. Tor hidden service). See TOR_SETUP.md{Color.RESET}")
+        print(f"{Color.YELLOW}[*] Bound to localhost only -- only reachable via a local"
+              f" forwarder (e.g. Tor hidden service). See TOR_SETUP.md{Color.RESET}")
     print(f"{Color.CYAN}[*] Shops stored in: {SHOPS_DIR}{Color.RESET}")
     print(f"{Color.DIM}[*] Waiting for nodes (Ctrl+C to stop)...{Color.RESET}\n")
 

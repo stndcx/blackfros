@@ -76,3 +76,11 @@ Input:focus {{
 .event {{ color: {SELECT}; }}
 .dim {{ color: {MUTED}; }}
 """
+
+STYLE_COLORS = {
+    "ok": GREEN,
+    "error": RED,
+    "chat": MAGENTA,
+    "event": SELECT,
+    "dim": MUTED,
+}
