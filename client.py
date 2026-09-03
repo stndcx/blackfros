@@ -16,6 +16,7 @@ from textual import work
 import theme
 from network import Connection, classify, DEFAULT_PORT, DEFAULT_TOR_PROXY_HOST, DEFAULT_TOR_PROXY_PORT
 from nmodal import NicknameModal
+from confirm_modal import ConfirmModal
 
 
 class BlackfrosClient(App):
@@ -26,7 +27,6 @@ class BlackfrosClient(App):
 
     BINDINGS = [
         Binding("q", "quit_app", "Quit"),
-        Binding("ctrl+q", "quit_app", "Quit"),
         Binding("r", "refresh_shops", "Refresh"),
         Binding("enter", "view_selected", "View shop", show=False),
         Binding("b", "quick_buy", "Buy"),
@@ -35,6 +35,7 @@ class BlackfrosClient(App):
         Binding("c", "quick_chat", "Chat"),
         Binding("w", "quick_wallet", "Wallet"),
         Binding("s", "quick_search", "Search"),
+        Binding("d", "quick_wipe", "Wipe shop"),
         Binding("tab", "focus_next", "Next panel"),
         Binding("shift+tab", "focus_previous", "Prev panel"),
         Binding("escape", "blur_input", "Back to list", show=False),
@@ -102,7 +103,7 @@ class BlackfrosClient(App):
         self.log_line(line, classify(line))
 
     def _pretty_shop(self, line: str):
-
+ 
         parts = line.split(maxsplit=6)
         if len(parts) < 7:
             return None
@@ -144,6 +145,7 @@ class BlackfrosClient(App):
             "Keys: \u2191/\u2193 move  Enter view  Tab/Shift+Tab switch panel\n"
             "  b buy   a add product   x remove product\n"
             "  c chat  w wallet        s search\n"
+            "  d wipe shop (asks to confirm)\n"
             "  r refresh shops         q quit\n"
             "  (Tab into the bottom bar to type any raw server command)",
             "dim",
@@ -173,6 +175,21 @@ class BlackfrosClient(App):
 
     def action_quick_search(self) -> None:
         self._prefill_input("SEARCH ")
+
+    def action_quick_wipe(self) -> None:
+        self.push_screen(
+            ConfirmModal(
+                "Wipe your shop?",
+                "This permanently deletes your shop, ratings, wallet and\n"
+                "transaction log from the server. This cannot be undone.",
+                confirm_label="Wipe",
+            ),
+            self._on_wipe_confirmed,
+        )
+
+    def _on_wipe_confirmed(self, confirmed: bool) -> None:
+        if confirmed:
+            self.send_command("WIPE")
 
     def action_quit_app(self) -> None:
         self.send_command("QUIT")

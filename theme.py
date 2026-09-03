@@ -1,6 +1,6 @@
 """
 BLACKFROS - theme
-v3.0.0-pre.1
+v3.0.0-pre.2
 """
 
 BG = "#1d1d2d"
